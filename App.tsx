@@ -8,7 +8,6 @@ import DataManagementView from './components/DataManagementView';
 import { MTS_SCHEDULE_BY_CLASS, MA_SCHEDULE_BY_CLASS, EMPTY_SCHEDULE_ROW } from './constants/scheduleData';
 import type { ScheduleType, ScheduleByClass, Conflict, ConflictDetail, Teacher, Subject, TeachingAssignment, ScheduleByClassItem } from './types';
 
-// Define ignored subjects directly in App.tsx for consistent logic
 const ignoredSubjects = [
   "ISTIRAHAT",
   "ISTIRAHAT & SHOLAT",
@@ -20,7 +19,6 @@ const ignoredSubjects = [
 ];
 const ignoredTeachers = ["-", "OSIS", "WALI", "PEMBINA"];
 
-// Helper function to calculate conflicts
 const calculateConflicts = (mtsSchedule: ScheduleByClass, maSchedule: ScheduleByClass, ignoredTeachers: string[]) => {
   const teacherScheduleMap = new Map<string, ConflictDetail[]>();
 
@@ -67,12 +65,10 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    // Load master data (TeachingAssignments)
     const savedAssignments = localStorage.getItem('teachingAssignments');
-    if (savedAssignments && JSON.parse(savedAssignments).length > 0) { // Check if not empty array
+    if (savedAssignments && JSON.parse(savedAssignments).length > 0) {
       setTeachingAssignments(JSON.parse(savedAssignments));
     } else {
-      // Initialize from constants for a baseline, if localStorage is empty or just `[]`
       const assignmentMap = new Map<string, Omit<TeachingAssignment, 'id' | 'teacherName'>>();
       const teacherNameMap = new Map<string, string>();
       
@@ -97,7 +93,7 @@ const App: React.FC = () => {
               });
             }
             if (!teacherNameMap.has(teacher)) {
-              teacherNameMap.set(teacher, `(Nama untuk ${teacher})`);
+              teacherNameMap.set(teacher, `Guru ${teacher}`);
             }
             const assignment = assignmentMap.get(key)!;
             if (school === 'Mts') assignment.teachesInMts = true;
@@ -106,26 +102,22 @@ const App: React.FC = () => {
         });
       };
       
-      // Only process constants if localStorage was truly empty or contained an empty array.
-      // Otherwise, keep it empty if the user intentionally cleared it to start fresh.
-      if (!savedAssignments) { // Only run this if nothing at all was saved, assuming a fresh start
+      if (!savedAssignments) {
         processScheduleForInit(MTS_SCHEDULE_BY_CLASS, 'Mts');
         processScheduleForInit(MA_SCHEDULE_BY_CLASS, 'Ma');
         const initialAssignments: TeachingAssignment[] = Array.from(assignmentMap.values()).map(assignment => ({
           ...assignment,
           id: self.crypto.randomUUID(),
-          teacherName: teacherNameMap.get(assignment.teacherCode) || '(Nama tidak ditemukan)',
+          teacherName: teacherNameMap.get(assignment.teacherCode) || 'Nama Guru',
         })).sort((a,b) => a.teacherCode.localeCompare(b.teacherCode, undefined, {numeric: true}) || a.subjectName.localeCompare(b.subjectName));
         setTeachingAssignments(initialAssignments);
         localStorage.setItem('teachingAssignments', JSON.stringify(initialAssignments));
       } else if (JSON.parse(savedAssignments).length === 0) {
-        // If it was explicitly saved as an empty array, keep it empty to respect user's reset
         setTeachingAssignments([]);
         localStorage.setItem('teachingAssignments', JSON.stringify([]));
       }
     }
 
-    // Load schedule data
     const savedMtsSchedule = localStorage.getItem('mtsSchedule');
     setMtsSchedule(savedMtsSchedule && Object.keys(JSON.parse(savedMtsSchedule)).length > 0 ? JSON.parse(savedMtsSchedule) : MTS_SCHEDULE_BY_CLASS);
 
@@ -138,9 +130,7 @@ const App: React.FC = () => {
     if (showAppNotification) {
       const timer = setTimeout(() => {
         setShowAppNotification(false);
-        setAppNotificationMessage('');
-        setAppNotificationType('info');
-      }, 3000); // Hide after 3 seconds
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [showAppNotification]);
@@ -169,7 +159,7 @@ const App: React.FC = () => {
 
     if (itemIndex !== -1) {
       const itemToUpdate: ScheduleByClassItem = { ...daySchedule[itemIndex] };
-      let newTeacherCode = itemToUpdate[`teacher${classKey}`]; // Keep current teacher code by default
+      let newTeacherCode = itemToUpdate[`teacher${classKey}`];
 
       if (field === 'subject') {
         itemToUpdate[`class${classKey}`] = value;
@@ -184,47 +174,34 @@ const App: React.FC = () => {
           if (firstMatchingAssignment) {
             newTeacherCode = firstMatchingAssignment.teacherCode;
           } else {
-            newTeacherCode = "-"; // If no assignment found for the subject and school type
+            newTeacherCode = "-";
           }
         } else {
-          newTeacherCode = "-"; // Ignored subjects always have '-' teacher code
+          newTeacherCode = "-";
         }
         itemToUpdate[`teacher${classKey}`] = newTeacherCode;
 
-      } else if (field === 'time') { // Handle time update
+      } else if (field === 'time') {
         const newTime = value.trim();
-        if (newTime === oldTime) { // No change, just close editing
-            return;
-        }
-        // Check for duplicate time slot in the same day (optional but good UX)
+        if (newTime === oldTime) return;
+        
         if (daySchedule.some((item, idx) => idx !== itemIndex && item.time === newTime)) {
-            setAppNotificationMessage(`Slot waktu '${newTime}' sudah ada di hari ini.`);
+            setAppNotificationMessage(`Slot waktu '${newTime}' sudah ada.`);
             setAppNotificationType('error');
             setShowAppNotification(true);
-            return; // Abort update
+            return;
         }
         itemToUpdate.time = newTime;
-        // Since time is changed, re-sort the day schedule
         currentSchedule[day] = [...daySchedule.slice(0, itemIndex), itemToUpdate, ...daySchedule.slice(itemIndex + 1)]
                                 .sort((a,b) => a.time.localeCompare(b.time));
         
         updateSchedule(scheduleType, currentSchedule);
-        setAppNotificationMessage(`Slot waktu berhasil diubah menjadi '${newTime}'.`);
+        setAppNotificationMessage(`Waktu diubah ke ${newTime}`);
         setAppNotificationType('success');
         setShowAppNotification(true);
-        return; // Return early as schedule is already updated
-      }
-      else { 
-        // This branch for 'teacher' field is technically not reached by UI interaction
-        // anymore since teacher cells are no longer editable dropdowns.
-        // Keeping for robustness in case of programmatic updates or future extensions.
-        itemToUpdate[`teacher${classKey}`] = value;
-        newTeacherCode = value; // Update newTeacherCode if directly setting teacher
+        return;
       }
       
-      // --- Conflict Detection before setting state ---
-      // The 'time' field is handled by an early return. At this point, `field` is either 'subject' or 'teacher'.
-      // Therefore, `field !== 'time'` is always true and redundant.
       if (newTeacherCode !== '-' && !ignoredTeachers.includes(newTeacherCode)) {
         const hypotheticalSchedule = { ...currentSchedule };
         const hypotheticalDaySchedule = [...daySchedule];
@@ -238,138 +215,69 @@ const App: React.FC = () => {
           ignoredTeachers
         );
         
-        const keyToCheck = `${day}-${oldTime}-${newTeacherCode}`; // Use oldTime if current time isn't changed
+        const keyToCheck = `${day}-${oldTime}-${newTeacherCode}`;
         if (potentialConflictSet.has(keyToCheck)) {
-          setConflictNotificationMessage(`Bentrok: Guru ${newTeacherCode} memiliki jadwal di jam yang sama!`);
+          setConflictNotificationMessage(`BENTROK: Guru ${newTeacherCode} ada jadwal lain!`);
           setShowConflictNotification(true);
-          setTimeout(() => setShowConflictNotification(false), 5000); // Hide after 5 seconds
+          setTimeout(() => setShowConflictNotification(false), 5000);
         } else {
-          // If no conflict, ensure previous notification is cleared
           setShowConflictNotification(false);
-          setConflictNotificationMessage('');
         }
-      } else { // Clear notification if teacher becomes ignored/empty and not updating time
+      } else {
         setShowConflictNotification(false);
-        setConflictNotificationMessage('');
       }
-      // --- End Conflict Detection ---
 
-      // Only update if not handled by the 'time' field block
-      // The 'time' field is handled by an early return. At this point, `field` is either 'subject' or 'teacher'.
-      // Therefore, `field !== 'time'` is always true and redundant.
-      daySchedule[itemIndex] = itemToUpdate; // Apply changes to the mutable copy for state update
+      daySchedule[itemIndex] = itemToUpdate;
       currentSchedule[day] = daySchedule;
       updateSchedule(scheduleType, currentSchedule);
     }
   };
 
   const handleAddDay = (scheduleType: 'MTs' | 'MA') => {
-    const newDayName = prompt('Masukkan nama hari baru (contoh: Minggu):');
-    if (!newDayName || newDayName.trim() === '') {
-      return;
-    }
+    const newDayName = prompt('Nama hari baru (contoh: Senin):');
+    if (!newDayName) return;
     const normalizedNewDayName = newDayName.trim();
     const currentSchedule = scheduleType === 'MTs' ? { ...mtsSchedule } : { ...maSchedule };
     
     if (Object.keys(currentSchedule).includes(normalizedNewDayName)) {
-      setAppNotificationMessage(`Hari '${normalizedNewDayName}' sudah ada.`);
+      setAppNotificationMessage(`Hari ${normalizedNewDayName} sudah ada.`);
       setAppNotificationType('error');
       setShowAppNotification(true);
       return;
     }
 
-    currentSchedule[normalizedNewDayName] = []; // Add with an empty schedule for the day
-    const sortedDays = Object.keys(currentSchedule).sort((a, b) => {
-      const dayOrder = ["Senin", "Selasa", "Rabu", "Kamis", "Jum'at", "Sabtu", "Minggu"];
-      const indexA = dayOrder.indexOf(a);
-      const indexB = dayOrder.indexOf(b);
-      if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
-
-    const newSortedSchedule: ScheduleByClass = {};
-    sortedDays.forEach(day => {
-      newSortedSchedule[day] = currentSchedule[day];
-    });
-
-    updateSchedule(scheduleType, newSortedSchedule);
-    setAppNotificationMessage(`Hari '${normalizedNewDayName}' berhasil ditambahkan.`);
-    setAppNotificationType('success');
-    setShowAppNotification(true);
+    currentSchedule[normalizedNewDayName] = [];
+    updateSchedule(scheduleType, currentSchedule);
   };
 
   const handleDeleteDay = (scheduleType: 'MTs' | 'MA', dayToDelete: string) => {
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus hari '${dayToDelete}' beserta seluruh jadwalnya?`)) {
-      return;
-    }
+    if (!window.confirm(`Hapus seluruh jadwal hari ${dayToDelete}?`)) return;
     const currentSchedule = scheduleType === 'MTs' ? { ...mtsSchedule } : { ...maSchedule };
     delete currentSchedule[dayToDelete];
     updateSchedule(scheduleType, currentSchedule);
-    setAppNotificationMessage(`Hari '${dayToDelete}' berhasil dihapus.`);
-    setAppNotificationType('success');
-    setShowAppNotification(true);
   };
 
   const handleAddRow = (scheduleType: 'MTs' | 'MA', day: string) => {
-    const newTimeSlot = prompt('Masukkan slot waktu baru (contoh: HH:MM - HH:MM):');
-    if (!newTimeSlot || newTimeSlot.trim() === '') {
-      return;
-    }
-    const normalizedNewTimeSlot = newTimeSlot.trim();
+    const newTimeSlot = prompt('Jam baru (contoh: 07:00 - 07:40):');
+    if (!newTimeSlot) return;
     const currentSchedule = scheduleType === 'MTs' ? { ...mtsSchedule } : { ...maSchedule };
     const daySchedule = [...(currentSchedule[day] || [])];
 
-    if (daySchedule.some(item => item.time === normalizedNewTimeSlot)) {
-      setAppNotificationMessage(`Slot waktu '${normalizedNewTimeSlot}' sudah ada di hari ini.`);
-      setAppNotificationType('error');
-      setShowAppNotification(true);
-      return;
-    }
-
-    const newRow: ScheduleByClassItem = {
-      time: normalizedNewTimeSlot,
-      ...EMPTY_SCHEDULE_ROW
-    };
-    
-    const updatedDaySchedule = [...daySchedule, newRow].sort((a,b) => a.time.localeCompare(b.time));
-    currentSchedule[day] = updatedDaySchedule;
-    
+    const newRow: ScheduleByClassItem = { time: newTimeSlot.trim(), ...EMPTY_SCHEDULE_ROW };
+    currentSchedule[day] = [...daySchedule, newRow].sort((a,b) => a.time.localeCompare(b.time));
     updateSchedule(scheduleType, currentSchedule);
-    setAppNotificationMessage(`Baris baru untuk slot waktu '${normalizedNewTimeSlot}' berhasil ditambahkan.`);
-    setAppNotificationType('success');
-    setShowAppNotification(true);
   };
 
   const handleDeleteRow = (scheduleType: 'MTs' | 'MA', day: string, timeToDelete: string) => {
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus baris untuk slot waktu '${timeToDelete}'?`)) {
-      return;
-    }
     const currentSchedule = scheduleType === 'MTs' ? { ...mtsSchedule } : { ...maSchedule };
     currentSchedule[day] = (currentSchedule[day] || []).filter(item => item.time !== timeToDelete);
     updateSchedule(scheduleType, currentSchedule);
-    setAppNotificationMessage(`Baris untuk slot waktu '${timeToDelete}' berhasil dihapus.`);
-    setAppNotificationType('success');
-    setShowAppNotification(true);
   };
 
   const handleResetAllData = () => {
-    if (!window.confirm('Apakah Anda yakin ingin mereset semua data jadwal dan penugasan guru? Tindakan ini tidak dapat dibatalkan.')) {
-      return;
-    }
-
-    localStorage.removeItem('mtsSchedule');
-    localStorage.removeItem('maSchedule');
-    localStorage.removeItem('teachingAssignments');
-
-    setMtsSchedule({});
-    setMaSchedule({});
-    setTeachingAssignments([]);
-    setSelectedSchedule(null); // Go back to main menu after reset
-    setAppNotificationMessage('Semua data berhasil direset.');
-    setAppNotificationType('success');
-    setShowAppNotification(true);
+    if (!window.confirm('Hapus SEMUA data?')) return;
+    localStorage.clear();
+    window.location.reload();
   };
 
   const handleSelectSchedule = (schedule: ScheduleType) => setSelectedSchedule(schedule);
@@ -383,21 +291,17 @@ const App: React.FC = () => {
     const getUniqueSubjects = (school: 'Mts' | 'Ma'): Subject[] => {
       const relevantAssignments = teachingAssignments.filter(a => school === 'Mts' ? a.teachesInMts : a.teachesInMa);
       const uniqueSubjects = new Map<string, Subject>();
-
       relevantAssignments.forEach(a => {
-        // Only include subjects that are not in the ignored list
         if (!ignoredSubjects.some(ignored => a.subjectName.toUpperCase().includes(ignored.toUpperCase()))) {
-          if (!uniqueSubjects.has(a.subjectName)) {
-            uniqueSubjects.set(a.subjectName, { id: a.subjectName, name: a.subjectName });
-          }
+          uniqueSubjects.set(a.subjectName, { id: a.subjectName, name: a.subjectName });
         }
       });
       return Array.from(uniqueSubjects.values()).sort((a,b) => a.name.localeCompare(b.name));
     };
 
     return {
-      mtsSubjects: [...getUniqueSubjects('Mts'), { id: 'ISTIRAHAT', name: 'ISTIRAHAT' }, { id: 'ISTIRAHAT & SHOLAT', name: 'ISTIRAHAT & SHOLAT' }], // Add breaks back for subject dropdown
-      maSubjects: [...getUniqueSubjects('Ma'), { id: 'ISTIRAHAT', name: 'ISTIRAHAT' }, { id: 'ISTIRAHAT & SHOLAT', name: 'ISTIRAHAT & SHOLAT' }], // Add breaks back for subject dropdown
+      mtsSubjects: [...getUniqueSubjects('Mts'), { id: 'ISTIRAHAT', name: 'ISTIRAHAT' }, { id: 'ISTIRAHAT & SHOLAT', name: 'ISTIRAHAT & SHOLAT' }],
+      maSubjects: [...getUniqueSubjects('Ma'), { id: 'ISTIRAHAT', name: 'ISTIRAHAT' }, { id: 'ISTIRAHAT & SHOLAT', name: 'ISTIRAHAT & SHOLAT' }],
     };
   }, [teachingAssignments]);
 
@@ -416,26 +320,18 @@ const App: React.FC = () => {
     }
   };
 
-  const getNotificationClass = (type: 'success' | 'error' | 'info') => {
-    switch (type) {
-      case 'success': return 'bg-green-500';
-      case 'error': return 'bg-red-500';
-      case 'info': return 'bg-blue-500';
-    }
-  }
-
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans selection:bg-primary-100 selection:text-primary-700">
       <Header />
-      <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
-        <div className="w-full max-w-7xl">
+      <main className="flex-grow container mx-auto px-4 py-12 flex items-start justify-center">
+        <div className="w-full">
           {showConflictNotification && (
-            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500 text-white px-6 py-3 rounded-md shadow-lg transition-opacity duration-300 ease-in-out opacity-100 font-bold text-lg">
+            <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] bg-red-600 text-white px-8 py-4 rounded-2xl shadow-2xl transition-all animate-bounce font-bold text-lg border-4 border-white">
               {conflictNotificationMessage}
             </div>
           )}
           {showAppNotification && (
-            <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 ${getNotificationClass(appNotificationType)} text-white px-6 py-3 rounded-md shadow-lg transition-opacity duration-300 ease-in-out opacity-100 font-bold text-lg`}>
+            <div className={`fixed bottom-8 right-8 z-[100] ${appNotificationType === 'success' ? 'bg-green-600' : 'bg-blue-600'} text-white px-6 py-3 rounded-xl shadow-xl transition-all animate-slide-up font-semibold`}>
               {appNotificationMessage}
             </div>
           )}
@@ -443,6 +339,13 @@ const App: React.FC = () => {
         </div>
       </main>
       <Footer />
+      <style>{`
+        @keyframes slide-up {
+          from { transform: translateY(100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up { animation: slide-up 0.3s ease-out; }
+      `}</style>
     </div>
   );
 };

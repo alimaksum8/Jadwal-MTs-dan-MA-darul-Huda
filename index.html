@@ -13,7 +13,7 @@
           extend: {
             colors: {
               primary: {
-                DEFAULT: '#0D9488', // teal-600
+                DEFAULT: '#0D9488',
                 '50': '#F0FDFA',
                 '100': '#CCFBF1',
                 '200': '#99F6E4',
@@ -26,6 +26,13 @@
                 '900': '#134E4A',
                 '950': '#042F2E',
               },
+              secondary: {
+                DEFAULT: '#4F46E5', // indigo-600
+                '50': '#EEF2FF',
+                '100': '#E0E7FF',
+                '600': '#4F46E5',
+                '700': '#4338CA',
+              }
             }
           }
         }
@@ -43,5 +50,7 @@
 </head>
   <body>
     <div id="root"></div>
+    <!-- Penambahan script type module untuk memuat aplikasi -->
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>
